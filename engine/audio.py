@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """按音效表合成声音，再和画面合成成片。
 
-  python audio.py <工程目录>
+  python audio.py <工程目录>                          只有音效（默认）
+  python audio.py <工程目录> --music 音乐.mp3          加上背景音乐；--music-gain 调音量，默认 0.2
 
 读 audio/events.json（先跑 render.py --events），写出 audio/sfx.wav；
 如果 renders/raw.mp4 已经渲好，就合成 renders/final.mp4。
-只有音效，没有背景音乐。每种声音都是用数学现场合成的，不用任何录音素材。
+音效都是用数学现场合成的，不用任何录音素材。背景音乐默认不加；加的时候会循环到片长、头尾淡入淡出，
+每当有音效响起，音乐自动让开一些，不盖过音效。
 
 音效名字（film.js 的 SFX 表里写 [时刻, 名字, 选项]）：
   tick    一声轻"嗒"：计数、点亮一个小东西            选项 pitch（半音，可正可负）
@@ -20,7 +22,7 @@
   hush    从这一刻起彻底静音                          选项 dur（秒）
 每个音效都可以加 gain（音量倍数，默认 1）和 pan（左右，-1 到 1）。
 """
-import json, subprocess, sys, wave
+import argparse, json, subprocess, sys, wave
 from pathlib import Path
 import numpy as np
 
@@ -136,7 +138,21 @@ SOUNDS = {"tick": s_tick, "pop": s_pop, "thud": s_thud, "stamp": s_stamp, "chime
           "reveal": s_reveal, "rise": s_rise, "swish": s_swish, "noise": s_noise}
 
 
-def mix(events, end):
+def load_music(path, n):
+    """用 ffmpeg 把任意格式的音乐解成 48k 立体声；比片子短就从头循环，截到 n 个采样点，头尾淡入淡出。"""
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "s16le", "-ac", "2", "-ar", str(SR), "-"],
+                         capture_output=True).stdout
+    m = np.frombuffer(raw, "<i2").reshape(-1, 2) / 32768.0
+    if not len(m):
+        sys.exit(f"读不出这个音乐文件：{path}")
+    m = np.tile(m, (n // len(m) + 1, 1))[:n].copy()
+    fi, fo = min(n, SR), min(n, int(2.5 * SR))
+    m[:fi] *= np.linspace(0, 1, fi)[:, None]
+    m[n - fo:] *= np.linspace(1, 0, fo)[:, None]
+    return m
+
+
+def mix(events, end, music=None, music_gain=.2):
     n = int(end * SR) + SR
     out, mutes = np.zeros((n, 2)), []
     for t, name, o in events:
@@ -152,6 +168,10 @@ def mix(events, end):
         s = s[:max(0, n - i)]
         out[i:i + len(s), 0] += s * np.cos(pan) * 1.414
         out[i:i + len(s), 1] += s * np.sin(pan) * 1.414
+    if music is not None:                                          # 配乐：音效响的时候，音乐自动让开一些
+        level = lowpass(np.abs(out).max(axis=1), 6)
+        duck = 1 - .6 * np.clip(level / .05, 0, 1)
+        out += load_music(music, n) * music_gain * duck[:, None]
     for a, b in mutes:                                             # 静音：前后各留 15 毫秒的渐变，不会"咔"一声
         i, j, r = int(a * SR), int(b * SR), int(.015 * SR)
         out[max(0, i - r):i] *= np.linspace(1, 0, min(r, i))[:, None]
@@ -165,21 +185,26 @@ def mix(events, end):
 
 
 def main():
-    if len(sys.argv) < 2:
-        sys.exit(__doc__)
-    proj = Path(sys.argv[1]).resolve()
+    ap = argparse.ArgumentParser(description="合成音效（可选加背景音乐），再和画面合成成片")
+    ap.add_argument("proj", type=Path)
+    ap.add_argument("--music", type=Path, help="背景音乐文件（mp3、wav、m4a 都行）；不写就只有音效")
+    ap.add_argument("--music-gain", type=float, default=.2, help="背景音乐的音量，默认 0.2，比音效轻很多")
+    a = ap.parse_args()
+    proj = a.proj.resolve()
     src = proj / "audio" / "events.json"
     if not src.exists():
         sys.exit("还没有音效表。先跑：python engine/render.py <工程目录> --events")
+    if a.music and not a.music.exists():
+        sys.exit(f"找不到音乐文件：{a.music}")
     data = json.loads(src.read_text(encoding="utf-8"))
-    audio = mix(data["events"], data["end"])
+    audio = mix(data["events"], data["end"], a.music, a.music_gain)
     wav = proj / "audio" / "sfx.wav"
     with wave.open(str(wav), "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes((audio * 32767).astype("<i2").tobytes())
-    print(f"存好了：{wav}（{len(data['events'])} 个音效）")
+    print(f"存好了：{wav}（{len(data['events'])} 个音效{'，加了背景音乐' if a.music else ''}）")
     raw = proj / "renders" / "raw.mp4"
     if not raw.exists():
         print("还没有 renders/raw.mp4，渲完全片再跑一次就能合成成片。")

@@ -1,7 +1,9 @@
 # vibe-explainer
 
-一个给 Claude Code 用的 skill：把一个知识点做成**没有旁白的讲解短片**。
-观众读底部的一行字幕，同时看屏上把这句话演出来。整条片子由代码一帧一帧画出来，声音只有几下音效。
+全网大火的 Claude vibe 视频风格，我们这个项目就是专门针对这类视频做的 skill。
+
+相较于其他把视频风格、时长都固定死的 skill，我们这个 skill 会根据视频内容和讲解内容，自动适配视频的时长和风格。
+另外，默认没有背景音乐，只有音效；想要配乐，也可以按自己的要求加上。
 
 ![演示：一个数据包找路](examples/engine-tour/demo.gif)
 
@@ -13,7 +15,7 @@
 - **外观不套模板。** 每条片按题材、语气、屏上的主体和观看方式，现推一张"外观卡"：底色、颜色的含义、字体、字幕样式。横屏、竖屏都行。
 - **时长不预设。** 分镜表写完，按字幕句数算出时长。只讲一件事几十秒，讲五六个侧面几分钟都可以。
 - **改到看得懂为止。** 每一镜都截图检查；`render.py --check` 会自动查字幕会不会太长太快、有没有东西挡住字幕、同一帧渲两次是否一样。
-- **只有音效。** 没有配音，没有背景音乐；音效用代码现场合成，只给关键的那几下。
+- **默认只有音效。** 没有配音；音效用代码现场合成，只给关键的那几下。想要背景音乐，把音乐文件交给它，它会压低音量混进去，不盖过音效。
 
 ## 安装
 
@@ -36,17 +38,7 @@ python engine/get_fonts.py          # 下载开源字体（思源黑体、思源
 
 或者把一份文案、一页学习笔记交给它。它会按 `SKILL.md` 的流程走：立题和事实表、找形象、写分镜表并估时长、推外观卡、先做最难的一镜、做 30 秒样片，最后铺全片、合成音效。中间会停三次给你看：形象方案、分镜表加外观卡、样片。
 
-也可以自己动手：
-
-```bash
-python scripts/new_film.py ~/films/index --canvas 16:9   # 建工程：外观卡、分镜表、代码骨架
-python scripts/estimate.py ~/films/index --hold 4         # 按分镜表估时长
-python engine/render.py ~/films/index --serve             # 浏览器里预览
-python engine/render.py ~/films/index --sheet 16          # 拼一张图看全片
-python engine/render.py ~/films/index --check             # 自动检查
-python engine/render.py ~/films/index --jobs 4            # 渲全片
-python engine/render.py ~/films/index --events && python engine/audio.py ~/films/index   # 合成音效，出成片
-```
+想要配乐，跟它说一声，并告诉它音乐文件在哪就行。
 
 ## 目录
 
