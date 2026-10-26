@@ -1,0 +1,13 @@
+# 字体由 engine/get_fonts.py 下载，不放进仓库
+engine/fonts/
+
+# 渲染和检查的产物
+renders/
+review/
+audio/
+*.mp4
+*.wav
+
+__pycache__/
+*.pyc
+.DS_Store
