@@ -29,7 +29,6 @@ python engine/render.py <工程目录> --check                    # 自动检查
 python engine/render.py <工程目录> --jobs 4                   # 全片分 4 段同时渲 → renders/raw.mp4（没有声音）
 python engine/render.py <工程目录> --events                   # 导出音效表 → audio/events.json
 python engine/audio.py <工程目录>                             # 合成音效，和画面合成 → renders/final.mp4
-python engine/audio.py <工程目录> --music 音乐.mp3             # 同上，再加一段背景音乐（只在用户要求时）
 ```
 
 速度：演示片实测单路每秒约 40 帧（一分钟成片不到一分钟）；画面越复杂越慢，长片用 `--jobs 4` 分段同时渲。先看拼图，再渲片段，最后才渲全片。
@@ -145,10 +144,6 @@ const LOOK = {
 `film.js` 里的 `SFX` 表登记音效：`[时刻, 名字, 选项]`。名字和选项见 `audio.py` 开头的说明：
 `tick` `pop` `thud` `stamp` `chime` `reveal` `rise` `swish` `noise` `hush`，都可以加 `gain`（音量倍数）和 `pan`（左右）。
 登记多少，见 `SKILL.md` 第 8 步：只给关键的那几下。
-
-背景音乐默认不加。用户要时，`audio.py` 加 `--music 音乐文件`（mp3、wav、m4a 都行）：
-音乐比片子短就从头循环，开头 1 秒淡入、结尾 2.5 秒淡出；音效响的时候，音乐自动降低六成左右，不盖过音效；
-`--music-gain` 调整体音量，默认 0.2。`hush` 静音的那几秒，音乐也一起静下来。
 
 ## 七、容易踩的坑
 
