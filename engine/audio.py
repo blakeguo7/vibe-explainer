@@ -25,10 +25,33 @@
   slide   纸滑过去的"沙"：卡片、单子、面板滑进滑出
   keys    一串轻轻的打字声：命令行里打字               选项 dur（秒）、rate（每秒几下，默认 12）
 每个音效都可以加 gain（音量倍数，默认 1）和 pan（左右，-1 到 1）。
+
+合成前先筛一遍（thin）：thud、stamp、chime、reveal 这几种重音全留；
+其余的轻音，离上一声不到 1.5 秒就去掉，免得挤成一片，去掉了哪几个会打印出来。
+一串有节奏的动作（比如一路扫过去、一格格亮起）想全留，就在选项里写 keep: 1。
+render.py --check 用的是同一个筛子，会提前报出哪些地方太密。
 """
 import json, subprocess, sys, wave
 from pathlib import Path
 import numpy as np
+
+HEAVY = {"thud", "stamp", "chime", "reveal"}           # 重音：这一镜最关键的那一下，全留
+MIN_GAP = 1.5                                          # 轻音离上一声至少隔这么多秒
+
+
+def thin(events):
+    """筛一遍音效表，返回 (留下的, 去掉的)。
+    重音全留；写了 keep 的照留；其余的轻音离上一个留下的声音不到 MIN_GAP 秒，就去掉。hush 是静音，不算一声。"""
+    kept, dropped, last = [], [], -1e9
+    for e in sorted(events, key=lambda e: e[0]):
+        t, name, o = e[0], e[1], (e[2] if len(e) > 2 and e[2] else {})
+        if name == "hush" or name in HEAVY or o.get("keep") or t - last >= MIN_GAP:
+            kept.append(e)
+            if name != "hush":
+                last = t
+        else:
+            dropped.append(e)
+    return kept, dropped
 
 SR = 48000
 
@@ -215,14 +238,18 @@ def main():
     if not src.exists():
         sys.exit("还没有音效表。先跑：python engine/render.py <工程目录> --events")
     data = json.loads(src.read_text(encoding="utf-8"))
-    audio = mix(data["events"], data["end"])
+    events, dropped = thin(data["events"])
+    if dropped:
+        shown = "、".join(f"第 {e[0]:g} 秒 {e[1]}" for e in dropped[:8]) + ("……" if len(dropped) > 8 else "")
+        print(f"去掉了 {len(dropped)} 个挨得太近的轻音（离上一声不到 {MIN_GAP:g} 秒）：{shown}")
+    audio = mix(events, data["end"])
     wav = proj / "audio" / "sfx.wav"
     with wave.open(str(wav), "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes((audio * 32767).astype("<i2").tobytes())
-    print(f"存好了：{wav}（{len(data['events'])} 个音效）")
+    print(f"存好了：{wav}（{len(events)} 个音效，平均每 {data['end'] / max(1, len(events)):.1f} 秒一声）")
     raw = proj / "renders" / "raw.mp4"
     if not raw.exists():
         print("还没有 renders/raw.mp4，渲完全片再跑一次就能合成成片。")

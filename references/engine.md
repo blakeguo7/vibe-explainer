@@ -144,7 +144,8 @@ const LOOK = {
 `film.js` 里的 `SFX` 表登记音效：`[时刻, 名字, 选项]`。名字和选项见 `audio.py` 开头的说明：
 重音 `thud` `stamp` `chime` `reveal`，一般的 `tick` `pop` `rise` `swish` `noise` `hush`，轻音 `tap` `blip` `slide` `keys`；都可以加 `gain`（音量倍数）和 `pan`（左右）。
 登记多少，见 `SKILL.md` 第 8 步：看得见的动作配一声轻的，关键那一下配重的。
-一串动作可以在 `film.js` 里用一行代码生成，比如往下走三层：`[t0, t0 + .7, t0 + 1.4].map((t, i) => [t, 'blip', { pitch: 7 - i * 3.5, gain: .7 }])`。
+一串动作可以在 `film.js` 里用一行代码生成，比如往下走三层：`[t0, t0 + .7, t0 + 1.4].map((t, i) => [t, 'blip', { pitch: 7 - i * 3.5, gain: .7, keep: 1 }])`。
+`audio.py` 合成前会筛一遍：重音全留，轻音离上一声不到 1.5 秒就去掉，并打印去掉了哪几个；写了 `keep: 1` 的照留，像上面这串节奏。`--check` 用同一个规则，提前报出太密的地方。
 
 ## 七、容易踩的坑
 

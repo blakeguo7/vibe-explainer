@@ -8,7 +8,7 @@
   python render.py <工程目录> --clip 0 30 head     只渲 0–30 秒，存成 renders/head.mp4
   python render.py <工程目录>                      渲全片，存成 renders/raw.mp4（没有声音）
   python render.py <工程目录> --jobs 4             全片分 4 段同时渲，再拼起来
-  python render.py <工程目录> --check              自动检查：同一帧渲两次一样吗、字幕会不会太宽太快、字幕区有没有被占
+  python render.py <工程目录> --check              自动检查：同一帧渲两次一样吗、字幕会不会太宽太快、字幕区有没有被占；另外提醒音效太密的地方
   python render.py <工程目录> --events             导出音效表 audio/events.json，交给 audio.py
 
 工程目录里放 index.html 和 film.js；引擎由这里的小服务器挂在 /engine/ 下。
@@ -17,6 +17,8 @@ import argparse, base64, http.server, io, json, subprocess, sys, threading, time
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import unquote
+
+from audio import MIN_GAP, thin                                     # 音效太不太密，和合成时用同一个筛子判断
 
 ENGINE = Path(__file__).resolve().parent
 
@@ -160,8 +162,29 @@ def render_parallel(proj, jobs):
     print(f"存好了：{out}（{total / fps:.1f} 秒）")
 
 
+def sound_notes(events, end):
+    """音效太密的地方。合成时会自动去掉，所以只是提醒，不算问题。返回几行提醒；没有就返回空列表。"""
+    kept, dropped = thin(events)
+    if not dropped and not (len(events) > 1 and end / len(events) < 3):
+        return []
+    notes = [f"登记了 {len(events)} 个音效，平均每 {end / max(1, len(events)):.1f} 秒一声；"
+             f"有 {len(dropped)} 个轻音离上一声不到 {MIN_GAP:g} 秒，合成时会被去掉，"
+             f"剩 {len(kept)} 个，平均每 {end / max(1, len(kept)):.1f} 秒一声。"
+             f"要留下的就挪开一点；一串有节奏的动作可以在选项里写 keep: 1。会被去掉的在这些地方："]
+    spans = []                                                      # 被去掉的轻音，隔得近的并成一段
+    for e in dropped:
+        if spans and e[0] - spans[-1][-1][0] <= 3:
+            spans[-1].append(e)
+        else:
+            spans.append([e])
+    items = [(f"{tstr(s[0][0])} 秒" if len(s) == 1 else f"{tstr(s[0][0])}–{tstr(s[-1][0])} 秒")
+             + " " + "、".join(sorted({e[1] for e in s})) for s in spans]
+    notes += ["；".join(items[i:i + 4]) for i in range(0, len(items), 4)]          # 一行放四段
+    return notes
+
+
 def check(pg):
-    """能让程序查的，都在这里查。返回发现的问题。"""
+    """能让程序查的，都在这里查。返回 (问题, 提醒)：问题要改；提醒是音效太密，合成时会自动处理。"""
     end, problems = pg.film["end"], []
 
     for t in (end * .2, end * .5, end * .8):                       # 1. 同一帧渲两次必须一模一样
@@ -194,7 +217,7 @@ def check(pg):
                 spans.append((a, x)); a = y
         for a, b in spans:
             problems.append(f"第 {tstr(a)}–{tstr(b)} 秒：有画面伸进了字幕区。")
-    return problems
+    return problems, sound_notes(pg.evaluate("events()"), end)            # 5. 音效太不太密
 
 
 def main():
@@ -252,13 +275,18 @@ def main():
         elif a.frames:
             encode(pg, int(a.frames[0]), int(a.frames[1]), proj / "renders" / f"{a.frames[2]}.mp4", quiet=a.quiet)
         elif a.check:
-            problems = check(pg)
+            problems, notes = check(pg)
+            if notes:
+                print("提醒：音效太密（不算问题，合成时会自动去掉挨得太近的轻音）。" + notes[0])
+                for n in notes[1:]:
+                    print("  " + n)
             if problems:
                 print(f"发现 {len(problems)} 个问题：")
                 for p in problems:
                     print("  - " + p)
                 sys.exit(1)
-            print("自动检查都通过了：同一帧渲两次一样；字幕宽度和停留时间合适；字幕区没有被画面占用。")
+            print("自动检查都通过了：同一帧渲两次一样；字幕宽度和停留时间合适；字幕区没有被画面占用。"
+                  + ("" if notes else "音效疏密也合适。"))
         elif a.events:
             ev = pg.evaluate("events()")
             out = proj / "audio" / "events.json"
