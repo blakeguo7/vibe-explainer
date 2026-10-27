@@ -18,6 +18,12 @@
   swish   一阵风声：翻页、撕掉、甩出去
   noise   一段沙沙的噪声：讲到"噪声、干扰"时才用        选项 dur（秒）
   hush    从这一刻起彻底静音                          选项 dur（秒）
+下面四种是轻音，给画面里频繁出现的小动作用，音量本来就小，连着用也不吵：
+  tap     一声很轻的木头"笃"：卡片落位、小东西点亮      选项 pitch（半音）
+  blip    一声柔和的"嘟"：一步步往下走、一格格亮起；     选项 pitch（半音）
+          连着几步时音高依次变（比如 7、4、0），听得出在一步步走
+  slide   纸滑过去的"沙"：卡片、单子、面板滑进滑出
+  keys    一串轻轻的打字声：命令行里打字               选项 dur（秒）、rate（每秒几下，默认 12）
 每个音效都可以加 gain（音量倍数，默认 1）和 pan（左右，-1 到 1）。
 """
 import json, subprocess, sys, wave
@@ -132,8 +138,45 @@ def s_noise(o):
     return n * shape * .18
 
 
+def s_tap(o):
+    t = secs(.08)
+    f = 620 * 2 ** (o.get("pitch", 0) / 12)
+    body = np.sin(2 * np.pi * f * t) * np.exp(-t / .016)
+    knock = lowpass(noise(len(t), 17), 2200) * np.exp(-t / .004) * .6
+    return attack(body + knock, 1) * .3
+
+
+def s_blip(o):
+    t = secs(.14)
+    f = 784 * 2 ** (o.get("pitch", 0) / 12)
+    tone = np.sin(2 * np.pi * f * t) + .25 * np.sin(4 * np.pi * f * t)
+    return attack(tone * np.exp(-t / .045), 4) * .2
+
+
+def s_slide(o):
+    t = secs(.22)
+    n = noise(len(t), 21)
+    band = lowpass(n, 5000) - lowpass(n, 1400)
+    return band * np.sin(np.pi * t / t[-1]) ** 2 * .35
+
+
+def s_keys(o):
+    """一串打字声：每一下的时刻和轻重都由固定的种子决定，同一张表合成两次一模一样。"""
+    d, rate = o.get("dur", 1.5), o.get("rate", 12)
+    out, rng = np.zeros(int(d * SR) + int(.05 * SR)), np.random.default_rng(29)
+    hit = secs(.03)
+    for k in range(int(d * rate)):
+        i = int((k + rng.uniform(-.3, .3)) / rate * SR)
+        if i < 0:
+            continue
+        click = lowpass(noise(len(hit), 100 + k), 3000) * np.exp(-hit / .005) + np.sin(2 * np.pi * 320 * hit) * np.exp(-hit / .008) * .5
+        out[i:i + len(hit)] += click[:len(out) - i] * rng.uniform(.6, 1)
+    return out * .12
+
+
 SOUNDS = {"tick": s_tick, "pop": s_pop, "thud": s_thud, "stamp": s_stamp, "chime": s_chime,
-          "reveal": s_reveal, "rise": s_rise, "swish": s_swish, "noise": s_noise}
+          "reveal": s_reveal, "rise": s_rise, "swish": s_swish, "noise": s_noise,
+          "tap": s_tap, "blip": s_blip, "slide": s_slide, "keys": s_keys}
 
 
 def mix(events, end):

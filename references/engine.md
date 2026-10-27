@@ -142,8 +142,9 @@ const LOOK = {
 ## 六、声音
 
 `film.js` 里的 `SFX` 表登记音效：`[时刻, 名字, 选项]`。名字和选项见 `audio.py` 开头的说明：
-`tick` `pop` `thud` `stamp` `chime` `reveal` `rise` `swish` `noise` `hush`，都可以加 `gain`（音量倍数）和 `pan`（左右）。
-登记多少，见 `SKILL.md` 第 8 步：只给关键的那几下。
+重音 `thud` `stamp` `chime` `reveal`，一般的 `tick` `pop` `rise` `swish` `noise` `hush`，轻音 `tap` `blip` `slide` `keys`；都可以加 `gain`（音量倍数）和 `pan`（左右）。
+登记多少，见 `SKILL.md` 第 8 步：看得见的动作配一声轻的，关键那一下配重的。
+一串动作可以在 `film.js` 里用一行代码生成，比如往下走三层：`[t0, t0 + .7, t0 + 1.4].map((t, i) => [t, 'blip', { pitch: 7 - i * 3.5, gain: .7 }])`。
 
 ## 七、容易踩的坑
 
