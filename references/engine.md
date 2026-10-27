@@ -54,7 +54,7 @@ VE.film({
   draw(f, t) {
     f.scene(0, 9, (lt, a) => book(f, t, a));         // 相邻两个场景的时间窗重叠半秒，各自淡入淡出，不会硬切
     f.scene(8.3, 14, lt => f.titleCard(lt, { zh: '索引', sub: '为什么快' }));
-    f.flash(T.title);
+    f.flash(T.title, { peak: .2 });                  // 默认是白光；亮度压低，闪一下就好，不要整幅发白
   },
 });
 })();
