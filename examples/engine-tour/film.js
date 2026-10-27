@@ -125,7 +125,7 @@ VE.film({
   draw(f, t) {
     f.scene(0, T.title + .5, (lt, a) => network(f, t, a), .6, .6);
     f.scene(T.title - .1, T.end, lt => f.titleCard(lt, { zh: '数据包', sub: '总能找到下一条路', en: 'PACKET · ROUTING', font: 'sans', weight: 800 }), .2, .8);
-    f.flash(T.title, { color: 'accent', peak: .35 });
+    f.flash(T.title, { color: '#FFFFFF', peak: .22 });                 // 用白光：琥珀色叠在深底上会发黄发脏
   },
 });
 })();
