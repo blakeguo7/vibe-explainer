@@ -111,7 +111,7 @@ function paintBg(x, W, H, bg, t) {
 
 /* ---------- 画面对象 f：draw(f, t) 里所有的画都通过它 ---------- */
 class Frame {
-  constructor(W, H, look, band) { this.W = W; this.H = H; this.look = look; this.band = band; this.t = 0; this.frame = 0; this.posts = []; this.tmp = []; this.depth = 0; }
+  constructor(W, H, look, band) { this.W = W; this.H = H; this.look = look; this.band = band; this.t = 0; this.frame = 0; this.posts = []; this.tmp = []; this.depth = 0; this.clips = []; }
 
   col(c) { return (c && this.look.colors && this.look.colors[c]) || c; }    // 颜色可以写外观卡里的名字（'accent'），也可以直接写 '#……'
   get safe() { const m = this.W * MARGIN; return { x0: m, x1: this.W - m, y0: this.H * .04, y1: this.band[0] * this.H }; }   // 主体能用的范围
@@ -124,9 +124,9 @@ class Frame {
     if (o.s != null) Array.isArray(o.s) ? x.scale(o.s[0], o.s[1]) : x.scale(o.s, o.s);
     if (o.a != null) x.globalAlpha *= o.a;
     if (o.add) x.globalCompositeOperation = 'lighter';
-    if (o.clip) { x.beginPath(); x.rect(...o.clip); x.clip(); }
+    if (o.clip) { x.beginPath(); x.rect(...o.clip); x.clip(); this.clips.push([x.getTransform(), o.clip]); }   // 记下来，f.under() 里也要裁
     if (o.blur) x.filter = `blur(${o.blur}px)`;
-    try { fn(); } finally { x.restore(); }
+    try { fn(); } finally { if (o.clip) this.clips.pop(); x.restore(); }
   }
   /* 先画到一张临时画布上，再整组合成。一组互相重叠的半透明形状要一起淡入淡出时用它，否则重叠处会透 */
   layer(o, fn) {
@@ -141,8 +141,16 @@ class Frame {
     if (o.blur) keep.filter = `blur(${o.blur}px)`;
     keep.drawImage(c, 0, 0); keep.restore();
   }
-  /* 画到底层：有体积的实心东西（机器、书、角色、场景）画在这里，不参加辉光 */
-  under(fn) { const keep = this.x; this.x = this.U; try { fn(); } finally { this.x = keep; } }
+  /* 画到底层：有体积的实心东西（机器、书、角色、场景）画在这里，不参加辉光。
+   * 外面的位移、缩放、透明度（比如 f.scene 的淡入淡出）和 f.g 的裁剪范围，都会一起带进来 */
+  under(fn) {
+    const keep = this.x, u = this.U;
+    u.save();
+    for (const [m, r] of this.clips) { u.setTransform(m); u.beginPath(); u.rect(...r); u.clip(); }
+    u.setTransform(keep.getTransform()); u.globalAlpha = keep.globalAlpha;
+    this.x = u;
+    try { fn(); } finally { this.x = keep; u.restore(); }
+  }
 
   /* ---- 线和形。选项 o：stroke 描边色、fill 填充、w 线宽、a 透明度、dash 虚线、add 加法混合、cap ---- */
   paint(o, build) {
@@ -264,7 +272,7 @@ class Frame {
       i => { const k = soft(lt, .15 + i * .12, .55 + i * .12); return { a: k, blur: (1 - k) * 10 }; });
     const lw = W * .26 * ease.out(prog(lt, end - .1, end + .8)), ly = cy + size * .74;
     this.line(W / 2 - lw, ly, W / 2 + lw, ly, { stroke: o.line || 'accent', w: 1.5, a: a * .8 });
-    if (o.sub) this.text(o.sub, W / 2, cy + size * 1.16, { font: o.subFont || o.font || 'serif', weight: 500, size: Math.round(size * .26), track: size * .08, color: o.subColor || 'accent', a: a * soft(lt, end + .3, end + 1.1) });
+    if (o.sub) this.text(o.sub, W / 2, cy + size * 1.16, { font: o.subFont || o.font || 'serif', weight: 500, size: Math.round(size * .26), track: o.subTrack ?? size * .08, color: o.subColor || 'accent', a: a * soft(lt, end + .3, end + 1.1) });
     if (o.en) this.text(o.en, W / 2, cy + size * 1.55, { font: 'mono', size: Math.round(size * .13), track: size * .07, color: 'dim', a: a * soft(lt, end + .7, end + 1.5) });
   }
 }
@@ -336,7 +344,7 @@ function film(spec) {
 
   function seek(t) {
     t = clamp(t, 0, spec.dur);
-    f.t = t; f.frame = Math.round(t * fps); f.posts = []; f.bloom = undefined;
+    f.t = t; f.frame = Math.round(t * fps); f.posts = []; f.clips = []; f.bloom = undefined;
     for (const c of [BG, U, L, S]) reset(c.getContext('2d'));
     paintBg(BG.getContext('2d'), W, H, look.bg || {}, t);
     f.U = U.getContext('2d'); f.x = L.getContext('2d');

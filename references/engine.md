@@ -114,7 +114,7 @@ const LOOK = {
 |---|---|
 | `f.g({ at:[x,y], rot, s, a, add, clip:[x,y,w,h], blur }, fn)` | 在一组位移 / 旋转 / 缩放 / 透明度里画 fn |
 | `f.layer({ a, add, blur }, fn)` | 先画到临时画布再整组合成。互相重叠的半透明形状要一起淡入淡出时用它，否则重叠处会透 |
-| `f.under(fn)` | 画到底层：有体积的实心东西（机器、书、角色、场景）画在这里，不吃辉光 |
+| `f.under(fn)` | 画到底层：有体积的实心东西（机器、书、角色、场景）画在这里，不吃辉光。外面 `f.g` / `f.scene` 的位移、缩放、透明度和裁剪都会一起带进去 |
 | `f.scene(a, b, fn(lt, k), fin, fout)` | 只在 a 到 b 秒之间画 fn，并乘好淡入淡出；lt 是本地时间 |
 
 **线和形**（最后一个参数是选项：`stroke` 描边色、`fill` 填充、`w` 线宽、`a` 透明度、`dash` 虚线、`add` 加法混合、`cap`）
@@ -134,7 +134,7 @@ const LOOK = {
 `f.chars(str, x, y, o, per)` 逐字画：`per(i, 字)` 返回 `{ a, color, blur, dy, s }` 改这个字的样子，逐字显影、打字、单字变色都用它。
 `f.measure(str, o)` 只量宽度。`latin` 字体的数字高低不齐，数字用另外三种。
 
-**片名卡**：`f.titleCard(lt, { zh, sub, en, font, weight, size, y, color, subColor, line })`：大字逐字由虚变实，一条细线展开，副题和外文随后淡入。lt 是片名卡的本地时间。
+**片名卡**：`f.titleCard(lt, { zh, sub, en, font, weight, size, y, color, subColor, subTrack, line })`（副题里夹着英文时，把 `subTrack` 调小，英文字母才不会被拉开）：大字逐字由虚变实，一条细线展开，副题和外文随后淡入。lt 是片名卡的本地时间。
 片名卡的样子由外观卡决定；需要别的样子，就在 `film.js` 里自己画。
 
 **全幅效果**：`f.flash(t0, { rise, fall, color, peak })` 闪一下；`f.darken(a)` 整幅压暗（配合 `dip`）。

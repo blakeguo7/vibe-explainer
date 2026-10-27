@@ -39,7 +39,11 @@ def serve(proj, port):
         def log_message(self, *args):
             pass
 
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    class Server(http.server.ThreadingHTTPServer):
+        request_queue_size = 128                                    # 几路同时渲染时，浏览器会一下子要很多文件，默认的 5 个排不下
+        daemon_threads = True
+
+    srv = Server(("127.0.0.1", port), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 
@@ -56,15 +60,20 @@ def open_film(proj):
             pg = browser.new_page(viewport={"width": 1920, "height": 1920}, device_scale_factor=1)
             pg.on("pageerror", lambda e: errors.append(str(e)))
             pg.on("console", lambda m: m.type == "error" and errors.append(f"{m.text}（{m.location.get('url', '')}）"))
-            pg.goto(f"http://127.0.0.1:{srv.server_address[1]}/?render")
-            for _ in range(600):
-                if errors:
-                    sys.exit("film.js 出错了：\n  " + "\n  ".join(errors))
-                if pg.evaluate("window.READY === true"):
+            for attempt in range(3):                                    # 文件偶尔没加载上（机器很忙时），重新打开页面再试
+                errors.clear()
+                pg.goto(f"http://127.0.0.1:{srv.server_address[1]}/?render")
+                for _ in range(600):
+                    if errors or pg.evaluate("window.READY === true"):
+                        break
+                    time.sleep(0.1)
+                else:
+                    sys.exit("等了 60 秒，画面还没准备好。检查字体是否齐全（python engine/get_fonts.py）。")
+                if not errors:
                     break
-                time.sleep(0.1)
-            else:
-                sys.exit("等了 60 秒，画面还没准备好。检查字体是否齐全（python engine/get_fonts.py）。")
+                if attempt == 2 or not all("Failed to load resource" in e for e in errors):
+                    sys.exit("film.js 出错了：\n  " + "\n  ".join(errors))
+                time.sleep(1)
             w, h = pg.evaluate("SIZE")
             pg.set_viewport_size({"width": w, "height": h})
             pg.film = {"end": pg.evaluate("END"), "fps": pg.evaluate("FPS"), "size": (w, h)}
