@@ -167,8 +167,10 @@ def sound_notes(events, end):
     kept, dropped = thin(events)
     if not dropped and not (len(events) > 1 and end / len(events) < 3):
         return []
-    notes = [f"登记了 {len(events)} 个音效，平均每 {end / max(1, len(events)):.1f} 秒一声；"
-             f"有 {len(dropped)} 个轻音离上一声不到 {MIN_GAP:g} 秒，合成时会被去掉，"
+    head = f"登记了 {len(events)} 个音效，平均每 {end / max(1, len(events)):.1f} 秒一声"
+    if not dropped:                                                 # 只是平均偏密，一个都不去掉
+        return [head + "，比每 3–5 秒一声密一点；不过没有挨得太近的轻音，合成时一个都不会去掉。"]
+    notes = [head + f"；有 {len(dropped)} 个轻音离上一声不到 {MIN_GAP:g} 秒，合成时会被去掉，"
              f"剩 {len(kept)} 个，平均每 {end / max(1, len(kept)):.1f} 秒一声。"
              f"要留下的就挪开一点；一串有节奏的动作可以在选项里写 keep: 1。会被去掉的在这些地方："]
     spans = []                                                      # 被去掉的轻音，隔得近的并成一段
@@ -277,7 +279,7 @@ def main():
         elif a.check:
             problems, notes = check(pg)
             if notes:
-                print("提醒：音效太密（不算问题，合成时会自动去掉挨得太近的轻音）。" + notes[0])
+                print("提醒：音效有点密（不算问题）。" + notes[0])
                 for n in notes[1:]:
                     print("  " + n)
             if problems:
